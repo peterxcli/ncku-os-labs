@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include "sender.h"
 #include <mqueue.h>
 #include <fcntl.h>
@@ -15,12 +17,8 @@ void send(message_t message, mailbox_t* mailbox_ptr){
             perror("mq_send");
             exit(1);
         }
-        printf("Sending message: %s", message.mtext);
     } else if (mailbox_ptr->flag == 2) {
-        sem_wait(Receiver_SEM); // Wait for receiver to be ready
         strcpy(mailbox_ptr->storage.shm_addr, message.mtext);
-        printf("Sending message: %s", message.mtext);
-        sem_post(Sender_SEM);
     }
 }
 
@@ -35,13 +33,17 @@ int main(int argc, char* argv[]) {
     mailbox_t mailbox;
     mailbox.flag = method;
 
+    // Initialize semaphores (shared memory synchronization)
+    Sender_SEM = sem_open("/Sender_SEM", O_CREAT, 0644, 0);  
+    Receiver_SEM = sem_open("/Receiver_SEM", O_CREAT, 0644, 0); 
+
     if (method == 1) {
         printf("POSIX Message Passing\n");
 
         // Set up POSIX message queue attributes
         struct mq_attr attr;
-        attr.mq_flags = 0;            // No flags
-        attr.mq_maxmsg = 1;           // Set queue capacity to 1 (forces synchronization)
+        attr.mq_flags = 0;    // Non-blocking
+        attr.mq_maxmsg = 10;           // Set queue capacity to 10 (max is 10)
         attr.mq_msgsize = MAX_MSG_SIZE; // Maximum message size
         attr.mq_curmsgs = 0;          // No current messages
 
@@ -64,10 +66,6 @@ int main(int argc, char* argv[]) {
             perror("shmat");
             exit(1);
         }
-
-        // Initialize semaphores (shared memory synchronization)
-        Sender_SEM = sem_open("/Sender_SEM", O_CREAT, 0644, 0);  
-        Receiver_SEM = sem_open("/Receiver_SEM", O_CREAT, 0644, 1); 
     }
 
     FILE* file = fopen(input_file, "r");
@@ -77,19 +75,38 @@ int main(int argc, char* argv[]) {
     }
 
     message_t message;
-    clock_t start = clock();
+    struct timespec start, end;
+    double time_taken = 0;
+
+    
 
     while (fgets(message.mtext, sizeof(message.mtext), file)) {
+        sem_post(Sender_SEM);
+
+        printf("Sending message: %s", message.mtext);
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
         send(message, &mailbox);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        time_taken += (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) * 1e-9;
+
+        sem_wait(Receiver_SEM);
     }
 
     // Send an exit message
-    strcpy(message.mtext, "exit\n");
-    send(message, &mailbox);
-    printf("End of input file! exit!\n");
+    {
+        sem_post(Sender_SEM);
 
-    clock_t end = clock();
-    double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+        strcpy(message.mtext, "exit\n");
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        send(message, &mailbox);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        time_taken += (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) * 1e-9;
+
+        printf("\nEnd of input file! exit!\n");
+    }
+
     printf("Total time taken in sending msg: %f s\n", time_taken);
 
     fclose(file);
