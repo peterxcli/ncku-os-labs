@@ -17,7 +17,7 @@ typedef struct {
     int flag;      // 1 for message passing, 2 for shared memory
     union{
         mqd_t mq;
-        char* shm_addr;
+        void* shm_addr;
     }storage;
 } mailbox_t;
 

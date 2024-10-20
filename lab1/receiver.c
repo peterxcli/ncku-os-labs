@@ -1,15 +1,19 @@
 #define _POSIX_C_SOURCE 199309L
 
 #include "receiver.h"
-#include <sys/msg.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 #include <sys/shm.h>
 #include <semaphore.h>
-#include <fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
 
 sem_t *Sender_SEM, *Receiver_SEM; // Semaphores
 
 #define QUEUE_NAME "/lab1_posix_queue"
+
+#define SHARED_MEMORY_NAME "/lab1_shared_memory"
+#define SHARED_MEMORY_SIZE 1024
 
 void receive(message_t* message_ptr, mailbox_t* mailbox_ptr){
     if (mailbox_ptr->flag == 1) {
@@ -37,22 +41,36 @@ int main(int argc, char* argv[]) {
     Receiver_SEM = sem_open("/Receiver_SEM", O_CREAT, 0644, 0);
 
     if (method == 1) {
+        printf("POSIX Message Passing\n");
         mailbox.storage.mq = mq_open(QUEUE_NAME, O_RDONLY);
         if (mailbox.storage.mq == (mqd_t)-1) {
             perror("mq_open");
             exit(1);
         }
     } else if (method == 2) {
-        int shmid = shmget(IPC_PRIVATE, 1024, IPC_CREAT | 0666);
-        if (shmid == -1) {
-            perror("shmget");
+        printf("Using POSIX Shared Memory\n");
+
+        // Open shared memory
+        int shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, 0666);
+        if (shm_fd == -1) {
+            perror("shm_open");
             exit(1);
         }
-        mailbox.storage.shm_addr = (char*)shmat(shmid, NULL, 0);
-        if (mailbox.storage.shm_addr == (char*)-1) {
-            perror("shmat");
+
+        // Adjust the shared memory size
+        if (ftruncate(shm_fd, SHARED_MEMORY_SIZE) == -1) {
+            perror("ftruncate");
             exit(1);
         }
+
+        // Map shared memory into address space
+        mailbox.storage.shm_addr = mmap(0, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        if (mailbox.storage.shm_addr == MAP_FAILED) {
+            perror("mmap");
+            exit(1);
+        }
+
+        close(shm_fd); // No longer need the file descriptor
     }
 
     message_t message;
@@ -85,6 +103,12 @@ int main(int argc, char* argv[]) {
     sem_close(Receiver_SEM);
     sem_unlink("/Sender_SEM");
     sem_unlink("/Receiver_SEM");
+
+    // Unmap and unlink shared memory
+    if (method == 2) {
+        munmap(mailbox.storage.shm_addr, SHARED_MEMORY_SIZE);
+        shm_unlink(SHARED_MEMORY_NAME);
+    }
 
     return 0;
 }

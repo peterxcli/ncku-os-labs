@@ -1,13 +1,16 @@
 #define _POSIX_C_SOURCE 199309L
 
 #include "sender.h"
-#include <mqueue.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <time.h>
 
 #define QUEUE_NAME "/lab1_posix_queue"
 #define MAX_MSG_SIZE 1024
+#define SHARED_MEMORY_NAME "/lab1_shared_memory"
+#define SHARED_MEMORY_SIZE 1024
 
 sem_t *Sender_SEM, *Receiver_SEM; // Semaphores
 
@@ -54,18 +57,29 @@ int main(int argc, char* argv[]) {
             exit(1);
         }
     } else if (method == 2) {
-        // Shared Memory setup as in the previous solution
-        printf("Shared Memory\n");
-        int shmid = shmget(IPC_PRIVATE, 1024, IPC_CREAT | 0666);
-        if (shmid == -1) {
-            perror("shmget");
+        printf("Using POSIX Shared Memory\n");
+
+        // Open shared memory
+        int shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, 0666);
+        if (shm_fd == -1) {
+            perror("shm_open");
             exit(1);
         }
-        mailbox.storage.shm_addr = (char*)shmat(shmid, NULL, 0);
-        if (mailbox.storage.shm_addr == (char*)-1) {
-            perror("shmat");
+
+        // Adjust the shared memory size
+        if (ftruncate(shm_fd, SHARED_MEMORY_SIZE) == -1) {
+            perror("ftruncate");
             exit(1);
         }
+
+        // Map shared memory into address space
+        mailbox.storage.shm_addr = mmap(0, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        if (mailbox.storage.shm_addr == MAP_FAILED) {
+            perror("mmap");
+            exit(1);
+        }
+
+        close(shm_fd); // No longer need the file descriptor
     }
 
     FILE* file = fopen(input_file, "r");
@@ -77,8 +91,6 @@ int main(int argc, char* argv[]) {
     message_t message;
     struct timespec start, end;
     double time_taken = 0;
-
-    
 
     while (fgets(message.mtext, sizeof(message.mtext), file)) {
         sem_post(Sender_SEM);
@@ -116,12 +128,15 @@ int main(int argc, char* argv[]) {
         mq_close(mailbox.storage.mq);
         mq_unlink(QUEUE_NAME);
     } else if (method == 2) {
-        // Close and unlink semaphores if shared memory is used
-        sem_close(Sender_SEM);
-        sem_close(Receiver_SEM);
-        sem_unlink("/Sender_SEM");
-        sem_unlink("/Receiver_SEM");
+        munmap(mailbox.storage.shm_addr, SHARED_MEMORY_SIZE);
+        shm_unlink(SHARED_MEMORY_NAME);
     }
+
+    // Close and unlink semaphores
+    sem_close(Sender_SEM);
+    sem_close(Receiver_SEM);
+    sem_unlink("/Sender_SEM");
+    sem_unlink("/Receiver_SEM");
 
     return 0;
 }
