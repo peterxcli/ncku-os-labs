@@ -11,20 +11,20 @@
 #include <sys/shm.h>
 #include <semaphore.h>
 #include <time.h>
+#include <mqueue.h>
 
 typedef struct {
     int flag;      // 1 for message passing, 2 for shared memory
     union{
-        int msqid; //for system V api. You can replace it with struecture for POSIX api
+        mqd_t mq;
         char* shm_addr;
     }storage;
 } mailbox_t;
 
 
 typedef struct {
-    /*  TODO: 
-        Message structure for wrapper
-    */
+    long mtype;          // Message type, needed for message queues
+    char mtext[1024];    // Message content (up to 1024 bytes)
 } message_t;
 
 void send(message_t message, mailbox_t* mailbox_ptr);
