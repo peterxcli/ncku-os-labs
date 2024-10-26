@@ -37,7 +37,28 @@ void redirection(struct cmd_node *p){
  */
 int spawn_proc(struct cmd_node *p)
 {
-  	return 1;
+    pid_t pid;
+    int status;
+
+    pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        return -1;
+    } else if (pid == 0) {
+        // Child process
+        redirection(p);
+        execvp(p->args[0], p->args);
+        // If execvp returns, it must have failed
+        perror("execvp");
+        exit(EXIT_FAILURE);
+    } else {
+        // Parent process
+        do {
+            waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+
+    return WIFEXITED(status);
 }
 // ===============================================================
 
