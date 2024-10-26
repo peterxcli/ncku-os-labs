@@ -1,3 +1,6 @@
 .vscode/
 sender
 receiver
+*.o
+my_shell
+psh

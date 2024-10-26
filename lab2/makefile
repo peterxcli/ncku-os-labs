@@ -1,4 +1,4 @@
-TARGET 	= my_shell
+TARGET 	= psh
 CC     	= gcc
 FLAGS  	= -Wall
 OBJ    	= builtin.o command.o shell.o
@@ -7,7 +7,7 @@ SRC		= ./src/
 
 all: $(TARGET) 
 
-$(TARGET): my_shell.c $(OBJ) 
+$(TARGET): psh.c $(OBJ) 
 	$(CC) $(FLAGS) -o $(TARGET) $(OBJ) $<
 
 %.o: ${SRC}%.c ${INCLUDE}%.h
