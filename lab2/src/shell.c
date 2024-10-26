@@ -16,11 +16,31 @@
  * If you want to implement ( < , > ), use "in_file" and "out_file" included the cmd_node structure
  * If you want to implement ( | ), use "in" and "out" included the cmd_node structure.
  *
- * @param p cmd_node structure
+ * @param cmd cmd_node structure
  * 
  */
-void redirection(struct cmd_node *p){
-	
+int redirection(struct cmd_node *cmd){
+	if (cmd->in_file != NULL) {
+		int in = open(cmd->in_file, O_RDONLY);
+		if (in == -1) {
+			return -1;
+		}
+		dup2(in, 0);
+	}
+	if (cmd->out_file != NULL) {
+		int out = open(cmd->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (out == -1) {
+			return -1;
+		}
+		dup2(out, 1);
+	}
+	if (cmd->in != 0) {
+		dup2(cmd->in, 0);
+	}
+	if (cmd->out != 1) {
+		dup2(cmd->out, 1);
+	}
+	return 0;
 }
 // ===============================================================
 
@@ -42,21 +62,26 @@ int spawn_proc(struct cmd_node *p)
 
     pid = fork();
     if (pid == -1) {
-        perror("fork");
         return -1;
     } else if (pid == 0) {
         // Child process
-        redirection(p);
+		int err = redirection(p);
+		if (err == -1) {
+			return -1;
+		}
         execvp(p->args[0], p->args);
         // If execvp returns, it must have failed
-        perror("execvp");
-        exit(EXIT_FAILURE);
+        return -1;
     } else {
         // Parent process
         do {
             waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
     }
+
+	if (WIFSTOPPED(status) || WIFSIGNALED(status)) {
+		perror(p->args[0]);
+	}
 
     return WIFEXITED(status);
 }
@@ -74,7 +99,28 @@ int spawn_proc(struct cmd_node *p)
  */
 int fork_cmd_node(struct cmd *cmd)
 {
-	return 1;
+	int pipefd[2];
+	int status = 0;
+	int in = 0;
+	struct cmd_node *temp = cmd->head;
+	while (temp != NULL) {
+		temp->in = in;
+		if (temp->next != NULL) {
+			pipe(pipefd);
+			temp->out = pipefd[1];
+		} else {
+			temp->out = 1;
+		}
+		status = spawn_proc(temp);
+		if (status != 1) {
+			break;
+		}
+		close(pipefd[1]);
+		in = pipefd[0];
+		temp = temp->next;
+	}
+
+	return status;
 }
 // ===============================================================
 
@@ -97,7 +143,7 @@ void shell()
 			status = searchBuiltInCommand(temp);
 			if (status != -1){
 				int in = dup(STDIN_FILENO), out = dup(STDOUT_FILENO);
-				if( in == -1 | out == -1)
+				if( (in == -1) | (out == -1) )
 					perror("dup");
 				redirection(temp);
 				status = execBuiltInCommand(status,temp);
@@ -117,7 +163,6 @@ void shell()
 		}
 		// There are multiple commands ( | )
 		else{
-			
 			status = fork_cmd_node(cmd);
 		}
 		// free space
