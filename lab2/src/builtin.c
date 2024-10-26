@@ -55,6 +55,11 @@ int help(char **args)
 // ======================= requirement 2.1 =======================
 int cd(char **args)
 {
+	if (args[1] == NULL) {
+		fprintf(stderr, "shell: expected argument to \"cd\"\n");
+		return 1;
+	}
+	chdir(args[1]);
 	return 1;
 }
 // ===============================================================
