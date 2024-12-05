@@ -4,3 +4,10 @@ receiver
 *.o
 my_shell
 psh
+*.mod
+*.o
+*.cmd
+*.ko
+*.symvers
+*.order
+*mod.c

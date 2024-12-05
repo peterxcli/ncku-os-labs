@@ -9,16 +9,34 @@
 #define BUFSIZE  1024
 char buf[BUFSIZE]; //kernel buffer
 
-static ssize_t Mywrite(struct file *fileptr, const char __user *ubuf, size_t buffer_len, loff_t *offset){
-    /*Your code here*/
+static ssize_t Mywrite(struct file *fileptr, const char __user *ubuf, size_t buf_len, loff_t *offset){
+    ssize_t len;
+    
+    if(*offset > 0){
+        return 0;
+    }
 
-    /****************/
+    copy_from_user(buf, ubuf, buf_len);
+    
+    len = sprintf(buf+buf_len, "PID: %d, TID: %d, time: %lld\n", 
+                        current->tgid, current->pid, 
+                        current->utime/100/1000);
+    // printk("My_Kernel: Data from the user: %s\n", buf);
+    *offset += buf_len;
+    *offset += len;
+    buf_len += len;
+    return len;
 }
 
 
-static ssize_t Myread(struct file *fileptr, char __user *ubuf, size_t buffer_len, loff_t *offset){
-    /*Your code here*/
-
+static ssize_t Myread(struct file *fileptr, char __user *ubuf, size_t buf_len, loff_t *offset){
+    if(*offset > 0){
+        return 0;
+    }
+    // printk("myRead: %s, len = %d\n", buf, buf_len);
+    copy_to_user(ubuf, buf, buf_len);
+    *offset = *offset+ buf_len;
+    return buf_len;
     /****************/
 }
 
