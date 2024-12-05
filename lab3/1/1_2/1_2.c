@@ -15,11 +15,10 @@ pthread_mutex_t mutex;
 void spin_lock() {
     asm volatile(
         "loop:\n\t"
-        "mov $0, %%eax\n\t"
-        /*YOUR CODE HERE*/
-
-        /****************/
-        "js loop\n\t"
+            "mov $0, %%eax\n\t"
+            "xchg %%eax, %[lock]\n\t"
+            "test %%eax, %%eax\n\t"
+            "je loop\n\t"
         :
         : [lock] "m" (lock)
         : "eax", "memory"
@@ -29,9 +28,7 @@ void spin_lock() {
 void spin_unlock() {
     asm volatile(
         "mov $1, %%eax\n\t"
-        /*YOUR CODE HERE*/
-
-        /****************/
+        "xchg %%eax, %[lock]\n\t"
         :
         : [lock] "m" (lock)
         : "eax", "memory"

@@ -16,8 +16,8 @@ judge2:
 	@rm -f 2.txt
 
 diff:
-	@gcc -o 2.out 2_1.c
+	@gcc -o 2.out 2_2.c
 	@./2.out
-	@git diff --word-diff  2_ans.txt 2.txt || true
+	@git diff --word-diff  2_2_ans.txt 2.txt || true
 	@rm -f 2.out
 	@rm -f 2.txt
