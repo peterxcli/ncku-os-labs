@@ -28,7 +28,7 @@ static struct dentry *osfs_lookup(struct inode *dir, struct dentry *dentry, unsi
             (int)dentry->d_name.len, dentry->d_name.name, dir->i_ino);
 
     // Read the parent directory's data block
-    dir_data_block = sb_info->data_blocks + parent_inode->i_block * BLOCK_SIZE;
+    dir_data_block = sb_info->data_blocks + parent_inode->i_block[0] * BLOCK_SIZE;
 
     // Calculate the number of directory entries
     dir_entry_count = parent_inode->i_size / sizeof(struct osfs_dir_entry);
@@ -76,7 +76,7 @@ static int osfs_iterate(struct file *filp, struct dir_context *ctx)
             return 0;
     }
 
-    dir_data_block = sb_info->data_blocks + osfs_inode->i_block * BLOCK_SIZE;
+    dir_data_block = sb_info->data_blocks + osfs_inode->i_block[0] * BLOCK_SIZE;
     dir_entry_count = osfs_inode->i_size / sizeof(struct osfs_dir_entry);
     dir_entries = (struct osfs_dir_entry *)dir_data_block;
 
@@ -183,12 +183,14 @@ struct inode *osfs_new_inode(const struct inode *dir, umode_t mode)
     inode->i_private = osfs_inode;
 
     /* Allocate data block */
-    ret = osfs_alloc_data_block(sb_info, &osfs_inode->i_block);
+    uint32_t block_no;
+    ret = osfs_alloc_data_block(sb_info, &block_no);
     if (ret) {
         pr_err("osfs_new_inode: Failed to allocate data block\n");
         iput(inode);
         return ERR_PTR(ret);
     }
+    osfs_inode->i_block[0] = block_no;  // Store in first block slot
 
     /* Update superblock information */
     sb_info->nr_free_inodes--;
@@ -209,7 +211,7 @@ static int osfs_add_dir_entry(struct inode *dir, uint32_t inode_no, const char *
     int i;
 
     // Read the parent directory's data block
-    dir_data_block = sb_info->data_blocks + parent_inode->i_block * BLOCK_SIZE;
+    dir_data_block = sb_info->data_blocks + parent_inode->i_block[0] * BLOCK_SIZE;
 
     // Calculate the existing number of directory entries
     dir_entry_count = parent_inode->i_size / sizeof(struct osfs_dir_entry);
@@ -263,7 +265,6 @@ static int osfs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry
     struct osfs_inode *parent_inode = dir->i_private;
     struct osfs_inode *osfs_inode;
     struct inode *inode;
-    int ret;
     
 
     // Step2: Validate the file name length

@@ -16,6 +16,7 @@
 #define DATA_BLOCK_COUNT 20    // Assume there are 20 data blocks
 #define MAX_FILENAME_LEN 255
 #define MAX_DIR_ENTRIES (BLOCK_SIZE / sizeof(struct osfs_dir_entry))
+#define MAX_BLOCKS_PER_FILE 20 // Maximum number of blocks per file
 
 #define BITMAP_SIZE(bits) (((bits) + BITS_PER_LONG - 1) / BITS_PER_LONG)
 
@@ -58,7 +59,7 @@ struct osfs_dir_entry {
 struct osfs_inode {
     uint32_t i_ino;                     // Inode number
     uint32_t i_size;                    // File size in bytes
-    uint32_t i_blocks;                  // Number of blocks occupied by the file
+    uint32_t i_blocks;                  // Number of blocks allocated
     uint16_t i_mode;                    // File mode (permissions and type)
     uint16_t i_links_count;             // Number of hard links
     uint32_t i_uid;                     // User ID of owner
@@ -66,7 +67,7 @@ struct osfs_inode {
     struct timespec64 __i_atime;        // Last access time
     struct timespec64 __i_mtime;        // Last modification time
     struct timespec64 __i_ctime;        // Creation time
-    uint32_t i_block;                   // Simplified handling, single data block pointer
+    uint32_t i_block[MAX_BLOCKS_PER_FILE];  // Array of block numbers
 };
 
 struct inode *osfs_iget(struct super_block *sb, unsigned long ino);
