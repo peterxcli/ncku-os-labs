@@ -11,5 +11,19 @@ all:
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 
+load:
+	@sudo insmod osfs.ko
+	
+unload:
+	@sudo umount -f mnt || true
+	@sudo rm -rf mnt
+	@sudo rmmod osfs.ko
+
+test:
+	mkdir mnt || true
+	$(MAKE) all
+	$(MAKE) load
+	sudo mount -t osfs none mnt/
 
 
+# sudo bash -c 'echo "Hello, World!" > test2'
